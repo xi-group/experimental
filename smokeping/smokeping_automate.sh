@@ -44,7 +44,7 @@ current_block=""
 processed=()
 
 # Get database input
-mysql -h aux.cognet.tv -u root -p molech -D ingest -B -N -e "SELECT DISTINCT (d.hostname), e.name as name, c.active, c.authorized FROM inputs AS c, server AS d, site AS e WHERE c.server_id=d.server_id AND d.site_id=e.site_id AND c.active = 1 ORDER BY d.hostname;" | while read -r line; do
+mysql -h  -u root -p  -D ingest -B -N -e "SELECT DISTINCT (d.hostname), e.name as name, c.active, c.authorized FROM inputs AS c, server AS d, site AS e WHERE c.server_id=d.server_id AND d.site_id=e.site_id AND c.active = 1 ORDER BY d.hostname;" | while read -r line; do
 
     # Extract hostname index and two last digits
     values="$(  awk '{print $(NF-1), $NF}' <<< "$line")"
