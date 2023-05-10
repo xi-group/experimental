@@ -13,7 +13,7 @@
 
 # Define s3 bucket path
 s3_bucket_path_current_file=s3://cn-ops/smokeping/current/
-s3_bucket_path_backups_file=s3://cn-ops/smokeping/backups/d/
+s3_bucket_path_backups_file=s3://cn-ops/smokeping/backups/$(date +%Y)/$(date +%m)/$(date +%d)/
 
 # Check if file dosen't exist in s3 or local.
 if [ ! -f "/etc/smokeping/config.d/New_Targets" ] && [ -z "$(aws s3 ls "s3://${s3_bucket_path_current_file}/New_Targets" --quiet)" ]; then
@@ -44,7 +44,15 @@ current_block=""
 processed=()
 
 # Get database input
-mysql -h  -u root -p  -D ingest -B -N -e "SELECT DISTINCT (d.hostname), e.name as name, c.active, c.authorized FROM inputs AS c, server AS d, site AS e WHERE c.server_id=d.server_id AND d.site_id=e.site_id AND c.active = 1 ORDER BY d.hostname;" | while read -r line; do
+MYSQL_HOST=$1
+MYSQL_USER=$2
+MYSQL_PASSWORD=$3
+MYSQL_DATABASE=$4
+
+
+
+#Executing query to database
+mysql -h "$MYSQL_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -D "$MYSQL_DATABASE" -B -N -e "SELECT DISTINCT (d.hostname), e.name as name, c.active, c.authorized FROM inputs AS c, server AS d, site AS e WHERE c.server_id=d.server_id AND d.site_id=e.site_id AND c.active = 1 ORDER BY d.hostname;" | while read -r line; do
 
     # Extract hostname index and two last digits
     values="$(  awk '{print $(NF-1), $NF}' <<< "$line")"
@@ -143,8 +151,9 @@ else
             echo "Make a backup of old Targets file"
 
             # Make a backup and upload it to s3 bucket
-	    cp /etc/smokeping/config.d/Targets  /etc/smokeping/config.d/Targets_backup_$(date +%Y-%m-%d)
-	    aws s3 cp "/etc/smokeping/config.d/Targets_backup_$(date +%Y-%m-%d)" "${s3_bucket_path_backups_file}/Targets_backup_$(date +%Y-%m-%d)"
+	    bkp_file="/etc/smokeping/config.d/Targets_backup_$(date +%s)"
+            cp /etc/smokeping/config.d/Targets ${bkp_file}
+            aws s3 cp "${bkp_file}" "${s3_bucket_path_backups_file}/"
             echo "File: Targets_backup succesfully was uploaded to "${s3_bucket_path_backups_file}/""
            
             # Replace Targets file with the new data from New_Targets
