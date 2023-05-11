@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 
 # This script is builded for updating Smokeping config file "Targets".The code is separated on two functionalities and it is assumed that it should work with crontab.
 
@@ -16,8 +16,8 @@
 
 
 # Define s3 bucket path
-s3_bucket_path_current_file=s3://cn-ops/smokeping/current/
-s3_bucket_path_backups_file=s3://cn-ops/smokeping/backups/$(date +%Y)/$(date +%m)/$(date +%d)/
+s3_bucket_path_current_file=s3://cn-ops/smokeping/current
+s3_bucket_path_backups_file=s3://cn-ops/smokeping/backups/$(date +%Y)/$(date +%m)/$(date +%d)
 
 # Check if file dosen't exist in s3 or local.
 if [ ! -f "/etc/smokeping/config.d/New_Targets" ] && [ -z "$(aws s3 ls "s3://${s3_bucket_path_current_file}/New_Targets" --quiet)" ]; then
@@ -32,9 +32,7 @@ targets_file="/etc/smokeping/config.d/Targets"
 # Create the header of the Targets file
 cat << EOF > ${output_file}
 *** Targets ***
-
 probe = FPing
-
 menu = Top
 title = Network Latency Grapher
 remark = Welcome to the SmokePing website of Inscape Company. 
@@ -123,7 +121,6 @@ while read -r line; do
        # Extract the hostname and name of the host
        hostname=$(echo $line | awk -F' ' '{print $1}')
        name=$(echo ${line%?????} | awk -F' ' '{print $2,$3,$4,$5,$6,$7}')
-      
         # Check if hostname starts with "ccr" or "vid" and has not been processed already
         if [[ "${hostname:0:3}" == "ccr" ]] && [[ ! " ${processed[@]} " =~ " ${hostname:0:3} " ]]; then
                # Add hostname to the processed array
@@ -173,7 +170,6 @@ EOF
             title=$(echo "${title}" | sed 's/[[:space:]]\+/ /g')
             # Create a new section for the current host
             cat << EOF >> ${output_file}
-
 ++ ${short_line^^}
 menu = ${name}
 title = ${title}
@@ -184,7 +180,6 @@ EOF
 
         # Add the host entry to the current section
         cat << EOF >> ${output_file}
-
 +++ ${hostname}
 menu = ${hostname}
 title = ${hostname}
@@ -201,27 +196,25 @@ aws s3 cp "/etc/smokeping/config.d/New_Targets" "${s3_bucket_path_current_file}/
 echo "File: $(basename "${output_file}") succesfully was uploaded to "${s3_bucket_path_current_file}/""
 
 else	
-      # Download file from S3	
-      aws s3 cp "${s3_bucket_path_current_file}/New_Targets" "/etc/smokeping/config.d/New_Targets"
-      echo "File: New_Targets was download from: "${s3_bucket_path_current_file}/""
+	# Download file from S3
+	aws s3 cp "${s3_bucket_path_current_file}/New_Targets" "/etc/smokeping/config.d/New_Targets"
+	echo "File: New_Targets was download from: "${s3_bucket_path_current_file}/""
 
-       if diff /etc/smokeping/config.d/New_Targets /etc/smokeping/config.d/Targets > /dev/null ; then
-            echo "Files are same"
-       else
-            echo "Files are different"
-            echo "Make a backup of old Targets file"
+	if diff /etc/smokeping/config.d/New_Targets /etc/smokeping/config.d/Targets > /dev/null ; then
+        echo "Files are same"
+	else
+		echo "Files are different"
+        echo "Make a backup of old Targets file"
 
-            # Make a backup and upload it to s3 bucket
-	    bkp_file="/etc/smokeping/config.d/Targets_backup_$(date +%s)"
-            cp /etc/smokeping/config.d/Targets ${bkp_file}
-            aws s3 cp "${bkp_file}" "${s3_bucket_path_backups_file}/"
-            echo "File: Targets_backup succesfully was uploaded to "${s3_bucket_path_backups_file}/""
-           
-            # Replace Targets file with the new data from New_Targets
-            cp /etc/smokeping/config.d/New_Targets /etc/smokeping/config.d/Targets
-	    echo "Restarting smokeping service"
-            sudo systemctl restart smokeping
-       fi
-     
+        # Make a backup and upload it to s3 bucket
+		bkp_file="/etc/smokeping/config.d/Targets_backup_$(date +%s)"
+		cp /etc/smokeping/config.d/Targets ${bkp_file}
+		aws s3 cp "${bkp_file}" "${s3_bucket_path_backups_file}/"
+		echo "File: Targets_backup succesfully was uploaded to ${s3_bucket_path_backups_file}/"
+
+		# Replace Targets file with the new data from New_Targets
+		cp /etc/smokeping/config.d/New_Targets /etc/smokeping/config.d/Targets
+		echo "Restarting smokeping service"
+		sudo systemctl restart smokeping
+	fi
 fi
-
