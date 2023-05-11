@@ -123,9 +123,9 @@ while read -r line; do
        name=$(echo ${line%?????} | awk -F' ' '{print $2,$3,$4,$5,$6,$7}')
         # Check if hostname starts with "ccr" or "vid" and has not been processed already
         if [[ "${hostname:0:3}" == "ccr" ]] && [[ ! " ${processed[@]} " =~ " ${hostname:0:3} " ]]; then
-               # Add hostname to the processed array
-	       processed+=("${hostname:0:3}")
-	       cat << EOF >> ${output_file}
+            # Add hostname to the processed array
+            processed+=("${hostname:0:3}")
+            cat << EOF >> ${output_file}
 
 + ${processed[0]^^}
 menu = ${processed[0]^^} Network
@@ -136,7 +136,7 @@ EOF
        elif [[ "${hostname:0:3}" == "vid" ]] && [[ ! " ${processed[@]} " =~ " ${hostname:0:3} " ]]; then
                # Add hostname to the processed array
                processed+=("${hostname:0:3}")
-	       ingest_name=${name:0:7}
+               ingest_name=${name:0:7}
                cat << EOF >> ${output_file}
 
 
@@ -195,26 +195,25 @@ echo "File: $(basename "${output_file}") generated successfully at ${output_file
 aws s3 cp "/etc/smokeping/config.d/New_Targets" "${s3_bucket_path_current_file}/New_Targets"
 echo "File: $(basename "${output_file}") succesfully was uploaded to "${s3_bucket_path_current_file}/""
 
-else	
-	# Download file from S3
-	aws s3 cp "${s3_bucket_path_current_file}/New_Targets" "/etc/smokeping/config.d/New_Targets"
-	echo "File: New_Targets was download from: "${s3_bucket_path_current_file}/""
+else
+    # Download file from S3
+    aws s3 cp "${s3_bucket_path_current_file}/New_Targets" "/etc/smokeping/config.d/New_Targets"
+    echo "File: New_Targets was download from: "${s3_bucket_path_current_file}/""
 
-	if diff /etc/smokeping/config.d/New_Targets /etc/smokeping/config.d/Targets > /dev/null ; then
+    if diff /etc/smokeping/config.d/New_Targets /etc/smokeping/config.d/Targets > /dev/null ; then
         echo "Files are same"
-	else
-		echo "Files are different"
+    else
+        echo "Files are different"
         echo "Make a backup of old Targets file"
 
         # Make a backup and upload it to s3 bucket
-		bkp_file="/etc/smokeping/config.d/Targets_backup_$(date +%s)"
-		cp /etc/smokeping/config.d/Targets ${bkp_file}
-		aws s3 cp "${bkp_file}" "${s3_bucket_path_backups_file}/"
-		echo "File: Targets_backup succesfully was uploaded to ${s3_bucket_path_backups_file}/"
-
-		# Replace Targets file with the new data from New_Targets
-		cp /etc/smokeping/config.d/New_Targets /etc/smokeping/config.d/Targets
-		echo "Restarting smokeping service"
-		sudo systemctl restart smokeping
-	fi
+        bkp_file="/etc/smokeping/config.d/Targets_backup_$(date +%s)"
+        cp /etc/smokeping/config.d/Targets ${bkp_file}
+        aws s3 cp "${bkp_file}" "${s3_bucket_path_backups_file}/"
+        echo "File: Targets_backup succesfully was uploaded to ${s3_bucket_path_backups_file}/"
+        # Replace Targets file with the new data from New_Targets
+        cp /etc/smokeping/config.d/New_Targets /etc/smokeping/config.d/Targets
+        echo "Restarting smokeping service"
+        sudo systemctl restart smokeping
+    fi
 fi
