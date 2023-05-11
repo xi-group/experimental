@@ -49,58 +49,58 @@ RET_CODE_ERROR=1
 
 # Help/Usage function
 print_help() {
-	echo "$0: Usage"
-	echo "    [-h] Print help"
-	echo "    [--username|-u] (MANDATORY) DB Username"
-	echo "    [--password|-p] (MANDATORY) DB Password"
-	echo "    [--host|-a] (MANDATORY) DB Hostname"
-	echo "    [--database|-d] (MANDATORY) DB Name"
-	echo "    [--sql-query|-q] (MANDATORY) SQL Query"
+    echo "$0: Usage"
+    echo "    [-h] Print help"
+    echo "    [--username|-u] (MANDATORY) DB Username"
+    echo "    [--password|-p] (MANDATORY) DB Password"
+    echo "    [--host|-a] (MANDATORY) DB Hostname"
+    echo "    [--database|-d] (MANDATORY) DB Name"
+    echo "    [--sql-query|-q] (MANDATORY) SQL Query"
 }
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]
 do
-	case "$1" in
-		--help|-h)
-			print_help
-			exit $RET_CODE_ERROR
-			;;
-		--username|-u)
-			USERNAME=$2
-			shift
-			;;
-		--password|-p)
-			PASSWORD=$2
-			shift
-			;;
-		--host|-a)
-			HOST=$2
-			shift
-			;;
-		--database|-d)
-			DB=$2
-			shift
-			;;
-		--sql-query|-q)
-			VALID_SQL=$2
-			shift
-			;;
-		*)
-			echo "$0: Unknown Argument: $1"
-			print_help
-			exit $RET_CODE_ERROR
-			;;
-	esac
+    case "$1" in
+        --help|-h)
+            print_help
+            exit $RET_CODE_ERROR
+            ;;
+        --username|-u)
+            USERNAME=$2
+            shift
+            ;;
+        --password|-p)
+            PASSWORD=$2
+            shift
+            ;;
+        --host|-a)
+            HOST=$2
+            shift
+            ;;
+        --database|-d)
+            DB=$2
+            shift
+            ;;
+        --sql-query|-q)
+            VALID_SQL=$2
+            shift
+            ;;
+        *)
+            echo "$0: Unknown Argument: $1"
+            print_help
+            exit $RET_CODE_ERROR
+            ;;
+    esac
 
-	shift
+    shift
 done
 
 # Check mandatory parameters
 if [ -z "$USERNAME" -o -z "$PASSWORD" -o -z "$HOST" -o -z "$DB" ]; then
-	echo "$0: Mandatory parameter missing!"
-	print_help
-	exit $RET_CODE_ERROR
+    echo "$0: Mandatory parameter missing!"
+    print_help
+    exit $RET_CODE_ERROR
 fi
 
 # Get database input
@@ -110,9 +110,7 @@ VALID_SQL="SELECT DISTINCT (d.hostname), e.name as name, c.active, c.authorized 
 RESULT=$(mysql -N -B -u "$USERNAME" -p "$PASSWORD" -h "$HOST" -D "$DB" -e "$VALID_SQL")
 
 while read -r line; do
-  # Do something with each line of the result
-
-
+    # Do something with each line of the result
     # Extract hostname index and two last digits
     values="$(  awk '{print $(NF-1), $NF}' <<< "$line")"
 
