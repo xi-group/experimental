@@ -11,6 +11,10 @@
 # 1.Download the config file New_Targets from s3 bucket.
 # 2.We compare the both files New_Targets and Targets, if are some diffrents then apply and restart smokeping service.
 
+# EXAMPLE USAGE
+# ./smokeping_automate.sh -u your_username -p your_password -a dbhost -d dbname
+
+
 # Define s3 bucket path
 s3_bucket_path_current_file=s3://cn-ops/smokeping/current/
 s3_bucket_path_backups_file=s3://cn-ops/smokeping/backups/$(date +%Y)/$(date +%m)/$(date +%d)/
@@ -43,16 +47,73 @@ current_block=""
 # Set an empty array to hold processed hostnames
 processed=()
 
+RET_CODE_ERROR=1
+
+# Help/Usage function
+print_help() {
+	echo "$0: Usage"
+	echo "    [-h] Print help"
+	echo "    [--username|-u] (MANDATORY) DB Username"
+	echo "    [--password|-p] (MANDATORY) DB Password"
+	echo "    [--host|-a] (MANDATORY) DB Hostname"
+	echo "    [--database|-d] (MANDATORY) DB Name"
+	echo "    [--sql-query|-q] (MANDATORY) SQL Query"
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]
+do
+	case "$1" in
+		--help|-h)
+			print_help
+			exit $RET_CODE_ERROR
+			;;
+		--username|-u)
+			USERNAME=$2
+			shift
+			;;
+		--password|-p)
+			PASSWORD=$2
+			shift
+			;;
+		--host|-a)
+			HOST=$2
+			shift
+			;;
+		--database|-d)
+			DB=$2
+			shift
+			;;
+		--sql-query|-q)
+			VALID_SQL=$2
+			shift
+			;;
+		*)
+			echo "$0: Unknown Argument: $1"
+			print_help
+			exit $RET_CODE_ERROR
+			;;
+	esac
+
+	shift
+done
+
+# Check mandatory parameters
+if [ -z "$USERNAME" -o -z "$PASSWORD" -o -z "$HOST" -o -z "$DB" ]; then
+	echo "$0: Mandatory parameter missing!"
+	print_help
+	exit $RET_CODE_ERROR
+fi
+
 # Get database input
-MYSQL_HOST=$1
-MYSQL_USER=$2
-MYSQL_PASSWORD=$3
-MYSQL_DATABASE=$4
+VALID_SQL="SELECT DISTINCT (d.hostname), e.name as name, c.active, c.authorized FROM inputs AS c, server AS d, site AS e WHERE c.server_id=d.server_id AND d.site_id=e.site_id AND c.active = 1 ORDER BY d.hostname;"
 
+# Executing query to database
+RESULT=$(mysql -N -B -u "$USERNAME" -p "$PASSWORD" -h "$HOST" -D "$DB" -e "$VALID_SQL")
 
+while read -r line; do
+  # Do something with each line of the result
 
-#Executing query to database
-mysql -h "$MYSQL_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -D "$MYSQL_DATABASE" -B -N -e "SELECT DISTINCT (d.hostname), e.name as name, c.active, c.authorized FROM inputs AS c, server AS d, site AS e WHERE c.server_id=d.server_id AND d.site_id=e.site_id AND c.active = 1 ORDER BY d.hostname;" | while read -r line; do
 
     # Extract hostname index and two last digits
     values="$(  awk '{print $(NF-1), $NF}' <<< "$line")"
@@ -131,7 +192,7 @@ host = ${hostname}-ext.cognet.tv
 alerts = rttdetect,hostdown
 EOF
     fi
-done
+done <<< "$RESULT"
 
 echo "File: $(basename "${output_file}") generated successfully at ${output_file}."
 
