@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # This script is builded for updating Smokeping config file "Targets".The code is separated on two functionalities and it is assumed that it should work with crontab.
 
@@ -16,11 +16,12 @@
 
 
 # Define s3 bucket path
-s3_bucket_path_current_file=s3://cn-ops/smokeping/current
+#s3_bucket_path_current_backup=s3://cn-ops/smokeping/current_backups/$(date +%Y)/$(date +%m)/$(date +%d)/
+#s3_bucket_path_current_file=s3://cn-ops/smokeping/current
 s3_bucket_path_backups_file=s3://cn-ops/smokeping/backups/$(date +%Y)/$(date +%m)/$(date +%d)
 
 # Check if file dosen't exist in s3 or local.
-if [ ! -f "/etc/smokeping/config.d/New_Targets" ] && [ -z "$(aws s3 ls "s3://${s3_bucket_path_current_file}/New_Targets" --quiet)" ]; then
+#if [ ! -f "/etc/smokeping/config.d/New_Targets" ] && [ -z "$(aws s3 ls "s3://${s3_bucket_path_current_file}/New_Targets")" ]; then
 
 # Define output file
 output_file="/etc/smokeping/config.d/New_Targets"
@@ -30,14 +31,14 @@ touch "${output_file}"
 targets_file="/etc/smokeping/config.d/Targets"
 
 # Create the header of the Targets file
-cat << EOF > ${output_file}
-*** Targets ***
-probe = FPing
-menu = Top
-title = Network Latency Grapher
-remark = Welcome to the SmokePing website of Inscape Company. 
-         Here you will learn all about the latency of our Ingest network.
-EOF
+#cat << EOF > ${output_file}
+#*** Targets ***
+#probe = FPing
+#menu = Top
+#title = Network Latency Grapher
+#remark = Welcome to the SmokePing website of Inscape Company. Here you will learn all about the latency of our Ingest network.
+
+#EOF
 
 # Define variable that keep block
 current_block=""
@@ -49,68 +50,85 @@ RET_CODE_ERROR=1
 
 # Help/Usage function
 print_help() {
-    echo "$0: Usage"
-    echo "    [-h] Print help"
-    echo "    [--username|-u] (MANDATORY) DB Username"
-    echo "    [--password|-p] (MANDATORY) DB Password"
-    echo "    [--host|-a] (MANDATORY) DB Hostname"
-    echo "    [--database|-d] (MANDATORY) DB Name"
-    echo "    [--sql-query|-q] (MANDATORY) SQL Query"
+	echo "$0: Usage"
+	echo "    [-h] Print help"
+	echo "    [--username|-u] (MANDATORY) DB Username"
+	echo "    [--password|-p] (MANDATORY) DB Password"
+	echo "    [--host|-a] (MANDATORY) DB Hostname"
+	echo "    [--database|-d] (MANDATORY) DB Name"
+	echo "    [--sql-query|-q] (MANDATORY) SQL Query"
 }
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]
 do
-    case "$1" in
-        --help|-h)
-            print_help
-            exit $RET_CODE_ERROR
-            ;;
-        --username|-u)
-            USERNAME=$2
-            shift
-            ;;
-        --password|-p)
-            PASSWORD=$2
-            shift
-            ;;
-        --host|-a)
-            HOST=$2
-            shift
-            ;;
-        --database|-d)
-            DB=$2
-            shift
-            ;;
-        --sql-query|-q)
-            VALID_SQL=$2
-            shift
-            ;;
-        *)
-            echo "$0: Unknown Argument: $1"
-            print_help
-            exit $RET_CODE_ERROR
-            ;;
-    esac
+	case "$1" in
+		--help|-h)
+			print_help
+			exit $RET_CODE_ERROR
+			;;
+		--username|-u)
+			USERNAME=$2
+			shift
+			;;
+		--password|-p)
+			PASSWORD=$2
+			shift
+			;;
+		--host|-a)
+			HOST=$2
+			shift
+			;;
+		--database|-d)
+			DB=$2
+			shift
+			;;
+		--sql-query|-q)
+			VALID_SQL=$2
+			shift
+			;;
+		*)
+			echo "$0: Unknown Argument: $1"
+			print_help
+			exit $RET_CODE_ERROR
+			;;
+	esac
 
-    shift
+	shift
 done
 
 # Check mandatory parameters
 if [ -z "$USERNAME" -o -z "$PASSWORD" -o -z "$HOST" -o -z "$DB" ]; then
-    echo "$0: Mandatory parameter missing!"
-    print_help
-    exit $RET_CODE_ERROR
+	echo "$0: Mandatory parameter missing!"
+	print_help
+	exit $RET_CODE_ERROR
 fi
 
 # Get database input
 VALID_SQL="SELECT DISTINCT (d.hostname), e.name as name, c.active, c.authorized FROM inputs AS c, server AS d, site AS e WHERE c.server_id=d.server_id AND d.site_id=e.site_id AND c.active = 1 ORDER BY d.hostname;"
 
 # Executing query to database
-RESULT=$(mysql -N -B -u "$USERNAME" -p "$PASSWORD" -h "$HOST" -D "$DB" -e "$VALID_SQL")
+export MYSQL_PWD="$PASSWORD"
+RESULT=$(mysql -N -B -u "$USERNAME" -h "$HOST" "$DB" -e "$VALID_SQL")
+unset $MYSQL_PWD
+
+
+# Create the header of the Targets file
+cat << EOF > ${output_file}
+*** Targets ***
+
+probe = FPing
+
+menu = Top
+title = Network Latency Grapher
+remark = Welcome to the SmokePing website of Inscape Company. Here you will learn all about the latency of our Ingest network.
+EOF
+
 
 while read -r line; do
-    # Do something with each line of the result
+  # Do something with each line of the result
+
+
     # Extract hostname index and two last digits
     values="$(  awk '{print $(NF-1), $NF}' <<< "$line")"
 
@@ -168,6 +186,7 @@ EOF
             title=$(echo "${title}" | sed 's/[[:space:]]\+/ /g')
             # Create a new section for the current host
             cat << EOF >> ${output_file}
+
 ++ ${short_line^^}
 menu = ${name}
 title = ${title}
@@ -178,6 +197,7 @@ EOF
 
         # Add the host entry to the current section
         cat << EOF >> ${output_file}
+
 +++ ${hostname}
 menu = ${hostname}
 title = ${hostname}
@@ -190,28 +210,37 @@ done <<< "$RESULT"
 echo "File: $(basename "${output_file}") generated successfully at ${output_file}."
 
 # Upload file to S3
-aws s3 cp "/etc/smokeping/config.d/New_Targets" "${s3_bucket_path_current_file}/New_Targets"
-echo "File: $(basename "${output_file}") succesfully was uploaded to "${s3_bucket_path_current_file}/""
+#aws s3 mv "/etc/smokeping/config.d/New_Targets" "${s3_bucket_path_current_file}/New_Targets"
+#echo "File: $(basename "${output_file}") succesfully was uploaded to "${s3_bucket_path_current_file}/""
 
-else
+#else
     # Download file from S3
-    aws s3 cp "${s3_bucket_path_current_file}/New_Targets" "/etc/smokeping/config.d/New_Targets"
-    echo "File: New_Targets was download from: "${s3_bucket_path_current_file}/""
+    # aws s3 mv "${s3_bucket_path_current_file}/New_Targets" "/etc/smokeping/config.d/New_Targets"
+    # echo "File: New_Targets was download from: "${s3_bucket_path_current_file}/""
 
     if diff /etc/smokeping/config.d/New_Targets /etc/smokeping/config.d/Targets > /dev/null ; then
-        echo "Files are same"
+	echo $(date) "Files are same"
+# Upload New_Targets file to s3 current_backups folder
+#    aws s3 mv "/etc/smokeping/config.d/New_Targets" "${s3_bucket_path_current_backup}/New_Targets_$(date +%s)"
+        rm /etc/smokeping/config.d/New_Targets
     else
-        echo "Files are different"
+	echo $(date) "Files are different"
         echo "Make a backup of old Targets file"
 
         # Make a backup and upload it to s3 bucket
         bkp_file="/etc/smokeping/config.d/Targets_backup_$(date +%s)"
         cp /etc/smokeping/config.d/Targets ${bkp_file}
-        aws s3 cp "${bkp_file}" "${s3_bucket_path_backups_file}/"
-        echo "File: Targets_backup succesfully was uploaded to ${s3_bucket_path_backups_file}/"
-        # Replace Targets file with the new data from New_Targets
+        aws s3 mv "${bkp_file}" "${s3_bucket_path_backups_file}/"
+	echo $(date) "File: Targets_backup succesfully was uploaded to ${s3_bucket_path_backups_file}/"
+        
+	# Replace Targets file with the new data from New_Targets
         cp /etc/smokeping/config.d/New_Targets /etc/smokeping/config.d/Targets
+
+        rm /etc/smokeping/config.d/New_Targets
+# Upload New_Targets file to s3 current folder
+#       aws s3 mv "/etc/smokeping/config.d/New_Targets" "${s3_bucket_path_current_file}/New_Targets"
         echo "Restarting smokeping service"
-        sudo systemctl restart smokeping
+        systemctl restart smokeping
     fi
-fi
+#fi
+
